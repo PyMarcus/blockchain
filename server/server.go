@@ -72,10 +72,59 @@ func handleChain(writer http.ResponseWriter, request *http.Request) {
 }
 
 // Consensus Algorithm, which resolves any conflicts—to ensure a node has the correct chain.
-func handleNodeResolve(writer http.ResponseWriter, request *http.Request) {}
+func handleNodeResolve(writer http.ResponseWriter, request *http.Request) {
+	if request.Method == "GET" {
+		var response = make(map[string]interface{})
+
+		replaced := b.SolveConflicts()
+		if replaced {
+
+			response["chain"] = b.Chain
+			response["message"] = "Chain are authoritative"
+
+			writer.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(writer).Encode(response)
+		} else {
+			response["new_chain"] = b.Chain
+			response["message"] = "Chain was replaced"
+
+			writer.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(writer).Encode(response)
+		}
+	}
+}
 
 // accept a list of new nodes in the form of URLs.
-func handleNodeRegister(writer http.ResponseWriter, request *http.Request) {}
+func handleNodeRegister(writer http.ResponseWriter, request *http.Request) {
+	if request.Method == "POST" {
+		var values map[string][]string
+		decoder := json.NewDecoder(request.Body)
+		err := decoder.Decode(&values)
+		if err != nil {
+			http.Error(writer, "fail to decode JSON", http.StatusBadRequest)
+			return
+		}
+
+		nodes, ok := values["nodes"]
+		if !ok {
+			http.Error(writer, "put valid node list", http.StatusBadRequest)
+			return
+		}
+
+		for _, n := range nodes {
+			b.RegisterNode(n)
+		}
+
+		var response = make(map[string]interface{})
+
+		response["message"] = "New node has been created!"
+		response["total"] = len(nodes)
+		response["nodes"] = nodes
+		writer.Header().Set("Content-Type", "application/json")
+
+		json.NewEncoder(writer).Encode(response)
+	}
+}
 
 func Start() {
 
@@ -88,5 +137,5 @@ func Start() {
 
 	log.Println("Listening on localhost:8080...")
 
-	http.ListenAndServe(":8080", nil)
+	http.ListenAndServe(":5001", nil)
 }
